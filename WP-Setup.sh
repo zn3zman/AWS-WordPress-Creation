@@ -2,7 +2,7 @@
 
 #Run script with the below. Most recent version will always be at that address.
 #sudo su
-#curl https://raw.githubusercontent.com/zn3zman/AWS-WordPress-Creation/master/WP-Setup.sh > WP-Setup.sh ; chmod 700 WP-Setup.sh ; ./WP-Setup.sh
+#curl https://cdn.rawgit.com/zn3zman/AWS-WordPress-Creation/master/WP-Setup.sh > WP-Setup.sh ; chmod +x WP-Setup.sh ; ./WP-Setup.sh
 
 # Set default variables
 wordpressdb=wordpress-db
@@ -173,12 +173,5 @@ then
 	chmod 2775 /srv/www
 	find /srv/www -type d -exec sudo chmod 2775 {} \;
 	find /srv/www -type f -exec sudo chmod 0664 {} \;
-	echo -e "\n\nNow go to http://$(curl --silent http://bot.whatismyipaddress.com/) in your browser to set up your site." | tee -a /root/WordPressSQLInfo.txt
-#	echo -e "\nRebooting in ten seconds to finalize..."
-#	for n in {10..1}; do
-#		printf "\r%s " $n
-#		sleep 1
-#	done
-#	shutdown -r now	
 fi
 echo -e "\n\nNow go to${green} http://$(curl --silent http://bot.whatismyipaddress.com/) ${nocolor}in your browser to set up your site.\n" | tee -a /root/WordPressSQLInfo.txt
