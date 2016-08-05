@@ -66,8 +66,9 @@ else
 	if [ $OS = "CentOS" ]
 	then
 		yum upgrade -y && yum update -y
+		yum remove -y php php-mysql
 		yum install -y httpd mysql-server php53 php53-mysql wget curl
-		/sbin/service mysqld start
+		/sbin/service mysql start
 	else
 		echo -e "I can't find your OS name. Exiting to prevent clutter."
 		rm -f /root/WordPressSQLInfo.txt
