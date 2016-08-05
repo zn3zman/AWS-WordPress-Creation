@@ -2,7 +2,7 @@
 
 #Run script with the below. Most recent version will always be at that address.
 #sudo su
-#curl https://klssnw.com/scripts/WP-Setup.sh > WP-Setup.sh ; chmod 700 WP-Setup.sh ; ./WP-Setup.sh
+#curl https://raw.githubusercontent.com/zn3zman/AWS-WordPress-Creation/master/WP-Setup.sh > WP-Setup.sh ; chmod 700 WP-Setup.sh ; ./WP-Setup.sh
 
 # Set default variables
 wordpressdb=wordpress-db
@@ -16,23 +16,18 @@ if [ -t 1 ]
 then
     # If not running as userdata, prompt for veriables.
     clear
-    echo "" ; echo ""
-    echo "Getting SQL variables. This information and further instructions will be stored in ${green}/root/WordPressSQLInfo.txt${nocolor}"
-    echo "" ; echo ""
-    read -e -p "What do you want your WordPress database to be named? " -i "wordpress-db" wordpressdb
-    echo ""
-    read -e -p "What do you want your SQL admin username to be? " -i "SQLAdmin" SQLUser
-    echo ""
-    read -e -p "What do you want $SQLUser's password to be? " -i "AComplexPassword87" SQLPass
+    echo -e "\n\nGetting SQL variables. This information and further instructions will be stored in ${green}/root/WordPressSQLInfo.txt${nocolor}"
+    read -e -p "\n\nWhat do you want your WordPress database to be named? " -i "wordpress-db" wordpressdb
+    read -e -p "\n\nWhat do you want your SQL admin username to be? " -i "SQLAdmin" SQLUser
+    read -e -p "\n\nWhat do you want $SQLUser's password to be? " -i "AComplexPassword87" SQLPass
 	clear
-	echo "" ; echo ""
 fi
 
 # Store SQL information, overwriting previous file if exists
-echo "Your Wordpress database is called: $wordpressdb" > /root/WordPressSQLInfo.txt
-echo "Your Wordpress Admin account is called: $SQLUser" >> /root/WordPressSQLInfo.txt
-echo "Your Wordpress admin account's password is: $SQLPass" >> /root/WordPressSQLInfo.txt
-echo "(this is also SQL root's password for simplification of the script. You should change this)" >> /root/WordPressSQLInfo.txt
+echo -e "Your Wordpress database is called: $wordpressdb" > /root/WordPressSQLInfo.txt
+echo -e "Your Wordpress Admin account is called: $SQLUser" >> /root/WordPressSQLInfo.txt
+echo -e "Your Wordpress admin account's password is: $SQLPass" >> /root/WordPressSQLInfo.txt
+echo -e "(this is also SQL root's password for simplification of the script. You should change this)" >> /root/WordPressSQLInfo.txt
 chmod 600 /root/WordPressSQLInfo.txt
 
 # Update server (hopefully), install apache, mysql, php, etc depending on OS
@@ -57,13 +52,13 @@ then
 	/bin/systemctl start mariadb.service
 elif [ $OS = "sles" ]
 then
-	echo "SUSE runs \"zypper update -y\" on initial boot. It can take up to 8 minutes to finish."
-	if zypper update -y --dry-run ; then g2g="yes" ; else g2g="no" ; fi ; while [ $g2g == "no" ]; do echo "Zypper is busy (up to 8 minutes). Waiting 5 seconds and retrying..." ; sleep 5 ; if zypper update -y --dry-run ; then g2g="yes" ; else g2g="no" ; fi ; done 
+	echo -e "SUSE runs \"zypper update -y\" on initial boot. It can take up to 8 minutes to finish."
+	if zypper update -y --dry-run ; then g2g="yes" ; else g2g="no" ; fi ; while [ $g2g == "no" ]; do echo -e "Zypper is busy (up to 8 minutes). Waiting 5 seconds and retrying..." ; sleep 5 ; if zypper update -y --dry-run ; then g2g="yes" ; else g2g="no" ; fi ; done 
 	zypper update -y
 	zypper install -y apache2 mariadb php5 php5-mysql apache2-mod_php5 wget curl
 	service mysql start
 else
-	echo "I can't find your OS name. Exiting to prevent clutter."
+	echo -e "I can't find your OS name. Exiting to prevent clutter."
 	exit 1
 fi
 
@@ -75,7 +70,7 @@ mysql -u root -p"$SQLPass" -e "DELETE FROM mysql.user WHERE User='root' AND Host
 mysql -u root -p"$SQLPass" -e "DELETE FROM mysql.user WHERE User=''"
 mysql -u root -p"$SQLPass" -e "DELETE FROM mysql.db WHERE Db='test' OR Db='test\_%'"
 mysql -u root -p"$SQLPass" -e "FLUSH PRIVILEGES"
-echo "SQL Secure"
+echo -e "SQL Secure"
 
 # Create the wordpress database
 mysql -u root -p"$SQLPass" -e "CREATE USER '$SQLUser'@'localhost' IDENTIFIED BY '$SQLPass';"
@@ -87,19 +82,19 @@ mysql -u root -p"$SQLPass" -e "FLUSH PRIVILEGES"
 # Also restart services, ensure services start on boot
 if [ $OS = "amzn" ]
 then
-	sed -i -e 's/AllowOverride None/AllowOverride All/' /etc/httpd/conf/httpd.conf
+	sed -i -e 's/AllowOverride None/AllowOverride All/g' /etc/httpd/conf/httpd.conf
 	service httpd start
 	service mysqld restart
 	chkconfig httpd on
 	chkconfig mysqld on
 elif [ $OS = "ubuntu" ]
 then
-	sed -i -e 's/AllowOverride None/AllowOverride All/' /etc/apache2/apache2.conf
+	sed -i -e 's/AllowOverride None/AllowOverride All/g' /etc/apache2/apache2.conf
 	service apache2 start
 	service mysql restart
 elif [ $OS = "rhel" ]
 then
-	sed -i -e 's/AllowOverride None/AllowOverride All/' /etc/httpd/conf/httpd.conf
+	sed -i -e 's/AllowOverride None/AllowOverride All/g' /etc/httpd/conf/httpd.conf
 	service httpd start
 	service mariadb restart
 	chkconfig httpd on
@@ -116,7 +111,7 @@ then
 	chkconfig apache2 on
 	chkconfig mysql on
 else
-	echo "I can't find your OS name. Exiting to prevent clutter."
+	echo -e "This script shouldn't have made it this far with your configuration. I have no idea how you did that. Exiting..."
 	exit 1
 fi
 
@@ -155,6 +150,7 @@ require_once(ABSPATH . 'wp-settings.php');
 EOF
 
 # Create www group, add apache to that group, and set permissions on /var/www/html to let WordPress access and update itself
+echo -e "\n\nUpdating permissions. This may take a few minutes...\n\n"
 if [ $OS = "amzn" ] || [ $OS = "rhel" ]
 then
 	groupadd www
@@ -174,14 +170,12 @@ then
 	chmod 2775 /srv/www
 	find /srv/www -type d -exec sudo chmod 2775 {} \;
 	find /srv/www -type f -exec sudo chmod 0664 {} \;
-	echo "Now go to http://$(curl --silent http://bot.whatismyipaddress.com/) in your browser to set up your site." | tee -a /root/WordPressSQLInfo.txt
-	echo "Rebooting in ten seconds to finalize..."
+	echo -e "\n\nNow go to http://$(curl --silent http://bot.whatismyipaddress.com/) in your browser to set up your site." | tee -a /root/WordPressSQLInfo.txt
+	echo -e "\nRebooting in ten seconds to finalize..."
 	for n in {10..1}; do
 		printf "\r%s " $n
 		sleep 1
 	done
 	shutdown -r now	
 fi
-echo "" ; echo ""
-echo "Now go to${green} http://$(curl --silent http://bot.whatismyipaddress.com/) ${nocolor}in your browser to set up your site." | tee -a /root/WordPressSQLInfo.txt
-echo ""
+echo -e "\n\nNow go to${green} http://$(curl --silent http://bot.whatismyipaddress.com/) ${nocolor}in your browser to set up your site.\n" | tee -a /root/WordPressSQLInfo.txt
