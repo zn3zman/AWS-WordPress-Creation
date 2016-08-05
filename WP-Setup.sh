@@ -66,7 +66,7 @@ else
 	if [ $OS = "CentOS" ]
 	then
 		yum upgrade -y && yum update -y
-		yum remove -y php php-mysql
+		yum remove -y php*
 		yum install -y httpd mysql-server php53 php53-mysql wget curl
 		/sbin/service mysql start
 	else
