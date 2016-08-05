@@ -128,9 +128,9 @@ elif [ $OS = "CentOS" ]
 then
 	sed -i -e 's/AllowOverride None/AllowOverride All/g' /etc/httpd/conf/httpd.conf
 	/sbin/service httpd start
-	/sbin/service mysqld restart
+	/sbin/service mysql restart
 	/sbin/chkconfig httpd on
-	/sbin/chkconfig mysqld on
+	/sbin/chkconfig mysql on
 else
 	echo -e "This script shouldn't have made it this far with your configuration. I have no idea how you did that. Exiting..."
 	exit 1
