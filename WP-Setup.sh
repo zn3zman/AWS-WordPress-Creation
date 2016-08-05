@@ -17,11 +17,11 @@ then
     # If not running as userdata, prompt for veriables.
     clear
     echo -e "\n\nGetting SQL variables. This information and further instructions will be stored in ${green}/root/WordPressSQLInfo.txt${nocolor}\n"
-	echo - "\n\n" #I can't put the \n's in the reads, annoyingly
+	echo -e "\n\n" #I can't put the \n's in the reads, annoyingly
     read -e -p "What do you want your WordPress database to be named? " -i "wordpress-db" wordpressdb
-	echo - "\n\n"
+	echo -e "\n\n"
     read -e -p "What do you want your SQL admin username to be? " -i "SQLAdmin" SQLUser
-	echo - "\n\n"
+	echo -e "\n\n"
     read -e -p "What do you want $SQLUser's password to be? " -i "AComplexPassword87" SQLPass
 	clear
 fi
