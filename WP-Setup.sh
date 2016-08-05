@@ -174,11 +174,11 @@ then
 	find /srv/www -type d -exec sudo chmod 2775 {} \;
 	find /srv/www -type f -exec sudo chmod 0664 {} \;
 	echo -e "\n\nNow go to http://$(curl --silent http://bot.whatismyipaddress.com/) in your browser to set up your site." | tee -a /root/WordPressSQLInfo.txt
-	echo -e "\nRebooting in ten seconds to finalize..."
-	for n in {10..1}; do
-		printf "\r%s " $n
-		sleep 1
-	done
-	shutdown -r now	
+#	echo -e "\nRebooting in ten seconds to finalize..."
+#	for n in {10..1}; do
+#		printf "\r%s " $n
+#		sleep 1
+#	done
+#	shutdown -r now	
 fi
 echo -e "\n\nNow go to${green} http://$(curl --silent http://bot.whatismyipaddress.com/) ${nocolor}in your browser to set up your site.\n" | tee -a /root/WordPressSQLInfo.txt
