@@ -17,11 +17,11 @@ then
     # If not running as userdata, prompt for veriables.
     clear
     echo -e "\n\nGetting SQL variables. This information and further instructions will be stored in ${green}/root/WordPressSQLInfo.txt${nocolor}\n"
-	echo -e "\n\n" #I can't put the \n's in the reads, annoyingly
+	echo -e "\n" #I can't put the \n's in the reads, annoyingly
     read -e -p "What do you want your WordPress database to be named? " -i "wordpress-db" wordpressdb
-	echo -e "\n\n"
+	echo -e "\n"
     read -e -p "What do you want your SQL admin username to be? " -i "SQLAdmin" SQLUser
-	echo -e "\n\n"
+	echo -e "\n"
     read -e -p "What do you want $SQLUser's password to be? " -i "AComplexPassword87" SQLPass
 	clear
 fi
@@ -34,7 +34,7 @@ echo -e "(this is also SQL root's password for simplification of the script. You
 chmod 600 /root/WordPressSQLInfo.txt
 
 # Update server (hopefully), install apache, mysql, php, etc depending on OS
-# This script handles basic amzn, ubuntu, rhel, suse, 
+# This script handles basic amzn, ubuntu, rhel, suse, and CentOS
 OS=$(cat /etc/os-release | grep "ID" | grep -v "VERSION" | grep -v "LIKE" | sed 's/ID=//g' | sed 's/["]//g' | awk '{print $1}')
 if [ $OS = "amzn" ]
 then
@@ -61,8 +61,18 @@ then
 	zypper install -y apache2 mariadb php5 php5-mysql apache2-mod_php5 wget curl
 	service mysql start
 else
-	echo -e "I can't find your OS name. Exiting to prevent clutter."
-	exit 1
+	OS=$(cat /etc/issue | awk '{print $1}')
+	OS=$(echo $OS | cut -d " " -f 1)
+	if [ $OS = "CentOS" ]
+	then
+		yum upgrade -y && yum update -y
+		yum install -y httpd mysql-server php53 php53-mysql wget curl
+		/sbin/service mysqld start
+	else
+		echo -e "I can't find your OS name. Exiting to prevent clutter."
+		rm -f /root/WordPressSQLInfo.txt
+		exit 1
+	fi
 fi
 
 # Automating mysql_secure_installation
@@ -113,6 +123,13 @@ then
 	service mysql restart
 	chkconfig apache2 on
 	chkconfig mysql on
+elif [ $OS = "CentOS" ]
+then
+	sed -i -e 's/AllowOverride None/AllowOverride All/g' /etc/httpd/conf/httpd.conf
+	/sbin/service httpd start
+	/sbin/service mysqld restart
+	/sbin/chkconfig httpd on
+	/sbin/chkconfig mysqld on
 else
 	echo -e "This script shouldn't have made it this far with your configuration. I have no idea how you did that. Exiting..."
 	exit 1
@@ -125,7 +142,12 @@ then
 else
 	cd /var/www/html
 fi
-wget http://wordpress.org/latest.tar.gz
+if [ wget https://wordpress.org/latest.tar.gz ] 
+then 
+	echo "good"
+else 
+	wget --no-check-certificate https://wordpress.org/latest.tar.gz
+fi 
 tar -xzvf latest.tar.gz
 cd wordpress
 mv -f * ../
@@ -154,9 +176,9 @@ EOF
 
 # Create www group, add apache to that group, and set permissions on /var/www/html to let WordPress access and update itself
 echo -e "\n\nUpdating permissions. This may take a few minutes...\n\n"
-if [ $OS = "amzn" ] || [ $OS = "rhel" ]
+if [ $OS = "amzn" ] || [ $OS = "rhel" ] || [ $OS = "CentOS" ]
 then
-	groupadd www
+	if ! groupadd www ; then /usr/sbin/groupadd www ; fi
 	usermod -a -G www apache
 	chown -R apache /var/www
 	chgrp -R www /var/www
