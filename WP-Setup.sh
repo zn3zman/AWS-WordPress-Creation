@@ -1,29 +1,45 @@
 #!/bin/bash
 
-#Run script with the below. Most recent version will always be at that address.
-#sudo su
-#curl https://cdn.rawgit.com/zn3zman/AWS-WordPress-Creation/master/WP-Setup.sh > WP-Setup.sh ; chmod +x WP-Setup.sh ; ./WP-Setup.sh
+# Poorly written by William Klassen - William.Klassen1@gmail.com
+# Run script with the below command as root ('sudo -i' or 'sudo su'). Most recent version will always be at that address.
+# bash <(curl https://cdn.rawgit.com/zn3zman/AWS-WordPress-Creation/master/WP-Setup.sh)
 
-# Set default variables
+# Set default variables. The top three are what will be used for your SQL details if the script is run from UserData
 wordpressdb=wordpress-db
 SQLUser=SQLAdmin
 SQLPass=AComplexPassword87
+updateme=yes
+red=`tput setaf 1`
 green=`tput setaf 2`
+yellow=`tput setaf 3`
 nocolor=`tput sgr0`
 
-# Running as UserData?
-if [ -t 1 ]
+# If not running as UserData, prompt for veriables.
+if [[ -t 1 ]]
 then
-    # If not running as userdata, prompt for veriables.
-    clear
+    # Confirm running as root. After testing, the script breaks if you try to run as a normal user prefixing sudo.  
+    if [[ $(id -u) -ne 0 ]]
+	then 
+		echo "${red}Please run as root ('${green}sudo -i${red}' or '${green}sudo su${red}' before running the script).{nocolor}"
+		exit 1
+	fi
+	clear
     echo -e "\n\nGetting SQL variables. This information and further instructions will be stored in ${green}/root/WordPressSQLInfo.txt${nocolor}\n"
-	echo -e "\n" #I can't put the \n's in the reads, annoyingly
-    read -e -p "What do you want your WordPress database to be named? " -i "wordpress-db" wordpressdb
+	echo -e "\n" #I can't put linebreaks in the reads, annoyingly
+    read -p "What do you want your WordPress database to be named? " -i "wordpress-db" -e wordpressdb
 	echo -e "\n"
     read -e -p "What do you want your SQL admin username to be? " -i "SQLAdmin" SQLUser
 	echo -e "\n"
     read -e -p "What do you want $SQLUser's password to be? " -i "AComplexPassword87" SQLPass
-	clear
+	echo -e "\n"
+	updateme="maybe"
+	read -e -p "Updating/Upgrading is highly recommended before proceeding. Do you want to update/upgrade? ('${green}yes${nocolor}' or '${red}no${nocolor}'?) " updateme
+	echo -e "\n"
+	while [[ $updateme != "yes" ]] && [[ $updateme != "no" ]]
+	do 
+		echo -e "\nYou entered '$updateme'. ${yellow}Please enter exactly '${green}yes${yellow}' or '${red}no${yellow}'${nocolor}\n"
+		read -e -p "Updating/Upgrading is highly recommended before proceeding. Update/upgrade? ('${green}yes${nocolor}' or '${red}no${nocolor}'?) " updateme
+	done
 fi
 
 # Store SQL information, overwriting previous file if exists
@@ -33,44 +49,81 @@ echo -e "Your Wordpress admin account's password is: $SQLPass" >> /root/WordPres
 echo -e "(this is also SQL root's password for simplification of the script. You should change this)" >> /root/WordPressSQLInfo.txt
 chmod 600 /root/WordPressSQLInfo.txt
 
-# Update server (hopefully), install apache, mysql, php, etc depending on OS
+# Update server (hopefully), install apache, mysql, php, etc depending on OS, then updates in case any of those were already installed
 # This script handles basic amzn, ubuntu, rhel, suse, and CentOS
 OS=$(cat /etc/os-release | grep "ID" | grep -v "VERSION" | grep -v "LIKE" | sed 's/ID=//g' | sed 's/["]//g' | awk '{print $1}')
-if [ $OS = "amzn" ]
+if [[ $OS = "amzn" ]]
 then
-	yum upgrade -y && yum update -y
+	if [[ $updateme = "yes" ]]
+	then
+		yum upgrade -y
+	fi
 	yum install -y httpd mysql-server php php-mysql wget curl
+	yum upgrade -y httpd mysql-server php php-mysql wget curl
 	service mysqld start
-elif [ $OS = "ubuntu" ]
+elif [[ $OS = "ubuntu" ]]
 then
-	apt-get update && apt-get upgrade -y
+	if [[ $updateme = "yes" ]]
+	then
+		yum apt-get update && apt-get upgrade -y
+	fi
+	# mysql starts immediately after installation and requires user intervention. The debian bit below seems to fix that.
 	export DEBIAN_FRONTEND=noninteractive
 	apt-get install -y apache2 mysql-server php5 php5-mysql wget curl
 	service mysql start
-elif [ $OS = "rhel" ]
+elif [[ $OS = "rhel" ]]
 then
-	yum upgrade -y && yum update -y
+	if [[ $updateme = "yes" ]]
+	then 
+		yum upgrade -y
+	fi
 	yum repolist enabled | grep "mysql.*-community.*"
 	yum install -y httpd mariadb mariadb-server php php-mysql wget curl
+	yum upgrade -y httpd mariadb mariadb-server php php-mysql wget curl
 	/bin/systemctl start mariadb.service
-elif [ $OS = "sles" ]
+elif [[ $OS = "sles" ]]
 then
 	echo -e "SUSE runs \"zypper update -y\" on initial boot. It can take up to 8 minutes to finish."
-	if zypper update -y --dry-run ; then g2g="yes" ; else g2g="no" ; fi ; while [ $g2g == "no" ]; do echo -e "Zypper is busy (up to 8 minutes). Waiting 5 seconds and retrying..." ; sleep 5 ; if zypper update -y --dry-run ; then g2g="yes" ; else g2g="no" ; fi ; done 
-	zypper update -y
+	if zypper update -y --dry-run
+	then 
+		g2g="yes" 
+	else
+		g2g="no"
+	fi
+	# Keep checking every five seconds to see if zypper is done
+	while [[ $g2g == "no" ]]
+	do 
+		echo -e "Zypper is busy (up to 8 minutes). Waiting 5 seconds and retrying..."
+		sleep 5
+		if zypper update -y --dry-run
+		then 
+			g2g="yes"
+		else
+			g2g="no"
+		fi
+	done 
+	if [ $updateme = "yes" ]
+	then 
+		zypper update -y
+	fi
 	zypper install -y apache2 mariadb php5 php5-mysql apache2-mod_php5 wget curl
+	zypper upgrade -y apache2 mariadb php5 php5-mysql apache2-mod_php5 wget curl
 	service mysql start
 else
+	# CentOS doesn't have /etc/os-release, so we need to use /etc/issue
 	OS=$(cat /etc/issue | awk '{print $1}')
 	OS=$(echo $OS | cut -d " " -f 1)
-	if [ $OS = "CentOS" ]
+	if [[ $OS = "CentOS" ]]
 	then
-		yum upgrade -y && yum update -y
-		yum remove -y php*
-		yum install -y httpd mysql-server php53 php53-mysql wget curl
-		/sbin/service mysql start
+		if [[ $updateme = "yes" ]]
+		then 
+			yum upgrade -y
+		fi
+		yum install -y httpd mysql-server php php-mysql wget curl
+		yum upgrade -y httpd mysql-server php php-mysql wget curl
+		/sbin/service mysqld start
 	else
-		echo -e "I can't find your OS name. Exiting to prevent clutter."
+		echo -e "Your distro is not supported by this script. Exiting to prevent clutter."
 		rm -f /root/WordPressSQLInfo.txt
 		exit 1
 	fi
@@ -84,7 +137,6 @@ mysql -u root -p"$SQLPass" -e "DELETE FROM mysql.user WHERE User='root' AND Host
 mysql -u root -p"$SQLPass" -e "DELETE FROM mysql.user WHERE User=''"
 mysql -u root -p"$SQLPass" -e "DELETE FROM mysql.db WHERE Db='test' OR Db='test\_%'"
 mysql -u root -p"$SQLPass" -e "FLUSH PRIVILEGES"
-echo -e "SQL Secure"
 
 # Create the wordpress database
 mysql -u root -p"$SQLPass" -e "CREATE USER '$SQLUser'@'localhost' IDENTIFIED BY '$SQLPass';"
@@ -93,27 +145,27 @@ mysql -u root -p"$SQLPass" -e "GRANT ALL PRIVILEGES ON \`$wordpressdb\`.* TO "$S
 mysql -u root -p"$SQLPass" -e "FLUSH PRIVILEGES"
 
 # Lazy way to allow WordPress access to .htaccess files
-# Also restart services, ensure services start on boot
-if [ $OS = "amzn" ]
+# Also restart services, ensure services start on boot, and changes any other needed settings for php to run correctly
+if [[ $OS = "amzn" ]]
 then
 	sed -i -e 's/AllowOverride None/AllowOverride All/g' /etc/httpd/conf/httpd.conf
 	service httpd start
 	service mysqld restart
 	chkconfig httpd on
 	chkconfig mysqld on
-elif [ $OS = "ubuntu" ]
+elif [[ $OS = "ubuntu" ]]
 then
 	sed -i -e 's/AllowOverride None/AllowOverride All/g' /etc/apache2/apache2.conf
 	service apache2 start
 	service mysql restart
-elif [ $OS = "rhel" ]
+elif [[ $OS = "rhel" ]]
 then
 	sed -i -e 's/AllowOverride None/AllowOverride All/g' /etc/httpd/conf/httpd.conf
 	service httpd start
 	service mariadb restart
 	chkconfig httpd on
 	chkconfig mariadb on
-elif [ $OS = "sles" ]
+elif [[ $OS = "sles" ]]
 then
 	sed -i -e 's/AllowOverride None/AllowOverride All/' /etc/apache2/default-server.conf
 	sed -i -e 's/DirectoryIndex index.html index.html.var/DirectoryIndex index.html index.html.var index.php/' /etc/apache2/httpd.conf
@@ -124,29 +176,31 @@ then
 	service mysql restart
 	chkconfig apache2 on
 	chkconfig mysql on
-elif [ $OS = "CentOS" ]
+elif [[ $OS = "CentOS" ]]
 then
 	sed -i -e 's/AllowOverride None/AllowOverride All/g' /etc/httpd/conf/httpd.conf
 	/sbin/service httpd start
-	/sbin/service mysql restart
+	/sbin/service mysqld restart
 	/sbin/chkconfig httpd on
-	/sbin/chkconfig mysql on
+	/sbin/chkconfig mysqld on
 else
-	echo -e "This script shouldn't have made it this far with your configuration. I have no idea how you did that. Exiting..."
-	exit 1
+	echo -e "This script shouldn't have made it this far with your configuration. I have no idea how you did that. But we'll still give it a shot."
 fi
 
-# Download the latest version of wordpress and move to /var/www/html
-if [ $OS = "sles" ]
+# Move to the www directory, wherever it is
+if [[ $OS = "sles" ]]
 then
 	cd /srv/www/htdocs/
 else
 	cd /var/www/html
 fi
-if [ wget https://wordpress.org/latest.tar.gz ] 
+
+# Use wget to download the latest wordpress tar
+if [[ wget https://wordpress.org/latest.tar.gz ]] 
 then 
-	echo "good"
+	echo -e "\n"
 else 
+	# Older versions of wget won't download from sites using HTTPS with wildcard certs (*.wordpress.org). This checks for that.
 	wget --no-check-certificate https://wordpress.org/latest.tar.gz
 fi 
 tar -xzvf latest.tar.gz
@@ -155,7 +209,7 @@ mv -f * ../
 cd ..
 rm -f latest.tar.gz
 rm -rf ./wordpress
-rm index.html -f
+rm -f index.html
 
 # Create wp-config.php and give it some salt. Normal comments are removed because I'm lazy
 WPSalts=$(curl https://api.wordpress.org/secret-key/1.1/salt/)
@@ -175,11 +229,14 @@ if ( !defined('ABSPATH') )
 require_once(ABSPATH . 'wp-settings.php');
 EOF
 
-# Create www group, add apache to that group, and set permissions on /var/www/html to let WordPress access and update itself
+# Create www group, add apache to that group, and set permissions on /var/www/html to let WordPress access and update itself. Not needed for Ubuntu?
 echo -e "\n\nUpdating permissions. This may take a few minutes...\n\n"
-if [ $OS = "amzn" ] || [ $OS = "rhel" ] || [ $OS = "CentOS" ]
+if [[ $OS = "amzn" ]] || [[ $OS = "rhel" ]] || [[ $OS = "CentOS" ]]
 then
-	if ! groupadd www ; then /usr/sbin/groupadd www ; fi
+	if ! groupadd www
+	then 
+		/usr/sbin/groupadd www
+	fi
 	usermod -a -G www apache
 	chown -R apache /var/www
 	chgrp -R www /var/www
@@ -188,13 +245,18 @@ then
 	find /var/www -type f -exec sudo chmod 0664 {} \;
 fi
 
-# SUSE's groups are weird. This might let WordPress access and update itself. It also won't accept SSH connections until it's rebooted, for some reason.
-if [ $OS = "sles" ]
+# SUSE's groups are weird. This might let WordPress access and update itself.
+if [[ $OS = "sles" ]]
 then
 	chown -R root /srv/www
 	chgrp -R www /srv/www
 	chmod 2775 /srv/www
 	find /srv/www -type d -exec sudo chmod 2775 {} \;
 	find /srv/www -type f -exec sudo chmod 0664 {} \;
+	#If this script is run from UserData, SUSE won't accept SSH sessions until it's rebooted. I have no idea why. Restarts if running from UserData
+	if [[ ! -t 1 ]]
+	then
+		shutdown -r now
+	fi
 fi
-echo -e "\n\nNow go to${green} http://$(curl --silent http://bot.whatismyipaddress.com/) ${nocolor}in your browser to set up your site.\n" | tee -a /root/WordPressSQLInfo.txt
+echo -e "\nComplete!\n\nNow go to${green} http://$(curl --silent http://bot.whatismyipaddress.com/) ${nocolor}in your browser to set up your site. You're welcome." | tee -a /root/WordPressSQLInfo.txt
