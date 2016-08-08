@@ -8,7 +8,7 @@
 wordpressdb=wordpress-db
 SQLUser=SQLAdmin
 SQLPass=AComplexPassword87
-updateme=yes
+upgrademe=yes
 red=`tput setaf 1`
 green=`tput setaf 2`
 yellow=`tput setaf 3`
@@ -26,35 +26,40 @@ then
 	clear
     echo -e "\n\nGetting SQL variables. This information and further instructions will be stored in ${green}/root/WordPressSQLInfo.txt${nocolor}\n"
 	echo -e "\n" #I can't put linebreaks in the reads, annoyingly
-    read -p "What do you want your WordPress database to be named? " -i "wordpress-db" -e wordpressdb
+    read -p "What do you want your WordPress database to be named? ${yellow}" -i "wordpress-db" -e wordpressdb
 	echo -e "\n"
-    read -e -p "What do you want your SQL admin username to be? " -i "SQLAdmin" SQLUser
+    read -e -p "${nocolor}What do you want your SQL admin username to be? ${yellow}" -i "SQLAdmin" SQLUser
 	echo -e "\n"
-    read -e -p "What do you want $SQLUser's password to be? " -i "AComplexPassword87" SQLPass
+    read -e -p "${nocolor}What do you want $SQLUser's password to be? ${yellow}" -i "AComplexPassword87" SQLPass
 	echo -e "\n"
-	updateme="maybe"
-	read -e -p "Updating/Upgrading is highly recommended before proceeding. Do you want to update/upgrade? ('${green}yes${nocolor}' or '${red}no${nocolor}'?) " updateme
+	upgrademe="maybe"
+	read -e -p "${nocolor}Running an upgrade/update is highly recommended. Do you want to automatically upgrade/update? ('${green}yes${nocolor}' or '${red}no${nocolor}'?) " upgrademe
 	echo -e "\n"
-	while [[ $updateme != "yes" ]] && [[ $updateme != "no" ]]
+	while [[ $upgrademe != "yes" ]] && [[ $upgrademe != "no" ]]
 	do 
-		echo -e "\nYou entered '$updateme'. ${yellow}Please enter exactly '${green}yes${yellow}' or '${red}no${yellow}'${nocolor}\n"
-		read -e -p "Updating/Upgrading is highly recommended before proceeding. Update/upgrade? ('${green}yes${nocolor}' or '${red}no${nocolor}'?) " updateme
+		echo -e "\nYou entered '$upgrademe'. ${yellow}Please enter exactly '${green}yes${yellow}' or '${red}no${yellow}'${nocolor}\n"
+		read -e -p "Upgrading/Updating is highly recommended before proceeding. Update/upgrade? ('${green}yes${nocolor}' or '${red}no${nocolor}'?) " upgrademe
 	done
 fi
 
 # Store SQL information, overwriting previous file if exists
 echo -e "Your Wordpress database is called: $wordpressdb" > /root/WordPressSQLInfo.txt
-echo -e "Your Wordpress Admin account is called: $SQLUser" >> /root/WordPressSQLInfo.txt
-echo -e "Your Wordpress admin account's password is: $SQLPass" >> /root/WordPressSQLInfo.txt
+echo -e "Your SQL Wordpress database's admin account is called: $SQLUser" >> /root/WordPressSQLInfo.txt
+echo -e "Your SQL Wordpress database's admin account's password is: $SQLPass" >> /root/WordPressSQLInfo.txt
 echo -e "(this is also SQL root's password for simplification of the script. You should change this)" >> /root/WordPressSQLInfo.txt
+# Remind the user to change both SQL passwords if the defaults were used
+if [[ ! -t 1 ]] || [[ $SQLPass = "AComplexPassword87" ]]
+then
+	echo -e "--This was installed with the default values for passwords. ${red}YOU SHOULD DEFINITELY CHANGE THESE PASSWORDS${nocolor}." >> /root/WordPressSQLInfo.txt
+fi
 chmod 600 /root/WordPressSQLInfo.txt
 
 # Update server (hopefully), install apache, mysql, php, etc depending on OS, then updates in case any of those were already installed
 # This script handles basic amzn, ubuntu, rhel, suse, and CentOS
-OS=$(cat /etc/os-release | grep "ID" | grep -v "VERSION" | grep -v "LIKE" | sed 's/ID=//g' | sed 's/["]//g' | awk '{print $1}')
+OS=$(cat /etc/os-release | grep "ID" | grep -v "VERSION" | grep -v "LIKE" | sed 's/ID=//g' | sed 's/["]//g' | awk '{print $1}') > /dev/null
 if [[ $OS = "amzn" ]]
 then
-	if [[ $updateme = "yes" ]]
+	if [[ $upgrademe = "yes" ]]
 	then
 		yum upgrade -y
 	fi
@@ -63,7 +68,7 @@ then
 	service mysqld start
 elif [[ $OS = "ubuntu" ]]
 then
-	if [[ $updateme = "yes" ]]
+	if [[ $upgrademe = "yes" ]]
 	then
 		yum apt-get update && apt-get upgrade -y
 	fi
@@ -73,7 +78,7 @@ then
 	service mysql start
 elif [[ $OS = "rhel" ]]
 then
-	if [[ $updateme = "yes" ]]
+	if [[ $upgrademe = "yes" ]]
 	then 
 		yum upgrade -y
 	fi
@@ -83,12 +88,12 @@ then
 	/bin/systemctl start mariadb.service
 elif [[ $OS = "sles" ]]
 then
-	echo -e "SUSE runs \"zypper update -y\" on initial boot. It can take up to 8 minutes to finish."
 	if zypper update -y --dry-run
 	then 
 		g2g="yes" 
 	else
 		g2g="no"
+		echo -e "SUSE runs \"zypper update -y\" on initial boot. It can take up to 8 minutes to finish."
 	fi
 	# Keep checking every five seconds to see if zypper is done
 	while [[ $g2g == "no" ]]
@@ -102,7 +107,7 @@ then
 			g2g="no"
 		fi
 	done 
-	if [ $updateme = "yes" ]
+	if [ $upgrademe = "yes" ]
 	then 
 		zypper update -y
 	fi
@@ -115,7 +120,7 @@ else
 	OS=$(echo $OS | cut -d " " -f 1)
 	if [[ $OS = "CentOS" ]]
 	then
-		if [[ $updateme = "yes" ]]
+		if [[ $upgrademe = "yes" ]]
 		then 
 			yum upgrade -y
 		fi
@@ -196,7 +201,7 @@ else
 fi
 
 # Use wget to download the latest wordpress tar
-if [[ wget https://wordpress.org/latest.tar.gz ]] 
+if wget https://wordpress.org/latest.tar.gz
 then 
 	echo -e "\n"
 else 
@@ -259,4 +264,5 @@ then
 		shutdown -r now
 	fi
 fi
-echo -e "\nComplete!\n\nNow go to${green} http://$(curl --silent http://bot.whatismyipaddress.com/) ${nocolor}in your browser to set up your site. You're welcome." | tee -a /root/WordPressSQLInfo.txt
+echo -e "\nNow go to${green} http://$(curl --silent http://bot.whatismyipaddress.com/) ${nocolor}in your browser to set up your site." | tee -a /root/WordPressSQLInfo.txt
+# You're welcome
