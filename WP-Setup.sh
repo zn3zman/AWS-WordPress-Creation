@@ -1,7 +1,10 @@
 #!/bin/bash
 
 # Poorly written by William Klassen - William.Klassen1@gmail.com
-# Run script with the below command as root ('sudo -i' or 'sudo su'). Most recent version will always be at that address.
+# This is mainly a learning experience for me. If you're running a WordPress site on AWS, you shouldn't be running everything off one instance.
+# A setup like this is good idea: https://cloudonaut.io/wordpress-on-aws-you-are-holding-it-wrong/
+
+# Run the script with the below command as root ('sudo -i' or 'sudo su'). Most recent version will always be at that address.
 # bash <(curl https://cdn.rawgit.com/zn3zman/AWS-WordPress-Creation/master/WP-Setup.sh)
 
 # Set default variables. The top three are what will be used for your SQL details if the script is run from UserData
@@ -56,7 +59,14 @@ chmod 600 /root/WordPressSQLInfo.txt
 
 # Update server (hopefully), install apache, mysql, php, etc depending on OS, then updates in case any of those were already installed
 # This script handles basic amzn, ubuntu, rhel, suse, and CentOS
-OS=$(cat /etc/os-release | grep "ID" | grep -v "VERSION" | grep -v "LIKE" | sed 's/ID=//g' | sed 's/["]//g' | awk '{print $1}') > /dev/null
+# If your image has a custom /etc/os-release or /etc/issue, this probably won't work
+OS=$(cat /etc/os-release | grep "ID" | grep -v "VERSION" | grep -v "LIKE" | sed 's/ID=//g' | sed 's/["]//g' | awk '{print $1}')
+# CentOS doesn't have /etc/os-release, so we need to use /etc/issue if the above doesn't work. Ugly, but it usually works
+if [[ "$OS" = "" ]]
+then 
+	OS=$(cat /etc/issue | awk '{print $1}')
+	OS=$(echo $OS | awk '{print$1}')
+fi
 if [[ $OS = "amzn" ]]
 then
 	if [[ $upgrademe = "yes" ]]
@@ -114,24 +124,19 @@ then
 	zypper install -y apache2 mariadb php5 php5-mysql apache2-mod_php5 wget curl
 	zypper upgrade -y apache2 mariadb php5 php5-mysql apache2-mod_php5 wget curl
 	service mysql start
-else
-	# CentOS doesn't have /etc/os-release, so we need to use /etc/issue
-	OS=$(cat /etc/issue | awk '{print $1}')
-	OS=$(echo $OS | cut -d " " -f 1)
-	if [[ $OS = "CentOS" ]]
-	then
-		if [[ $upgrademe = "yes" ]]
-		then 
-			yum upgrade -y
-		fi
-		yum install -y httpd mysql-server php php-mysql wget curl
-		yum upgrade -y httpd mysql-server php php-mysql wget curl
-		/sbin/service mysqld start
-	else
-		echo -e "Your distro is not supported by this script. Exiting to prevent clutter."
-		rm -f /root/WordPressSQLInfo.txt
-		exit 1
+elif [[ $OS = "CentOS" ]]
+then
+	if [[ $upgrademe = "yes" ]]
+	then 
+		yum upgrade -y
 	fi
+	yum install -y httpd mysql-server php php-mysql wget curl
+	yum upgrade -y httpd mysql-server php php-mysql wget curl
+	/sbin/service mysqld start
+else
+	echo -e "Your distro, '$OS', is not supported by this script. Exiting to prevent clutter."
+	rm -f /root/WordPressSQLInfo.txt
+	exit 1
 fi
 
 # Automating mysql_secure_installation
@@ -149,55 +154,18 @@ mysql -u root -p"$SQLPass" -e "CREATE DATABASE \`$wordpressdb\`;"
 mysql -u root -p"$SQLPass" -e "GRANT ALL PRIVILEGES ON \`$wordpressdb\`.* TO "$SQLUser"@'localhost';"
 mysql -u root -p"$SQLPass" -e "FLUSH PRIVILEGES"
 
-# Lazy way to allow WordPress access to .htaccess files
-# Also restart services, ensure services start on boot, and changes any other needed settings for php to run correctly
-if [[ $OS = "amzn" ]]
-then
-	sed -i -e 's/AllowOverride None/AllowOverride All/g' /etc/httpd/conf/httpd.conf
-	service httpd start
-	service mysqld restart
-	chkconfig httpd on
-	chkconfig mysqld on
-elif [[ $OS = "ubuntu" ]]
-then
-	sed -i -e 's/AllowOverride None/AllowOverride All/g' /etc/apache2/apache2.conf
-	service apache2 start
-	service mysql restart
-elif [[ $OS = "rhel" ]]
-then
-	sed -i -e 's/AllowOverride None/AllowOverride All/g' /etc/httpd/conf/httpd.conf
-	service httpd start
-	service mariadb restart
-	chkconfig httpd on
-	chkconfig mariadb on
-elif [[ $OS = "sles" ]]
-then
-	sed -i -e 's/AllowOverride None/AllowOverride All/' /etc/apache2/default-server.conf
-	sed -i -e 's/DirectoryIndex index.html index.html.var/DirectoryIndex index.html index.html.var index.php/' /etc/apache2/httpd.conf
-	sed -i -e 's/APACHE_MODULES="/APACHE_MODULES="php5 /' /etc/sysconfig/apache2
-	sed -i -e 's/FW_CONFIGURATIONS_EXT=""/FW_CONFIGURATIONS_EXT="apache2"/' /etc/sysconfig/SuSEfirewall2
-	systemctl restart SuSEfirewall2
-	service apache2 start
-	service mysql restart
-	chkconfig apache2 on
-	chkconfig mysql on
-elif [[ $OS = "CentOS" ]]
-then
-	sed -i -e 's/AllowOverride None/AllowOverride All/g' /etc/httpd/conf/httpd.conf
-	/sbin/service httpd start
-	/sbin/service mysqld restart
-	/sbin/chkconfig httpd on
-	/sbin/chkconfig mysqld on
-else
-	echo -e "This script shouldn't have made it this far with your configuration. I have no idea how you did that. But we'll still give it a shot."
-fi
-
 # Move to the www directory, wherever it is
 if [[ $OS = "sles" ]]
 then
 	cd /srv/www/htdocs/
 else
 	cd /var/www/html
+fi
+#Error handling
+if [ "$?" != "0" ]
+then 
+	echo "Apache's www directory not found. Exiting to prevent something bad."
+	exit 1
 fi
 
 # Use wget to download the latest wordpress tar
@@ -207,8 +175,14 @@ then
 else 
 	# Older versions of wget won't download from sites using HTTPS with wildcard certs (*.wordpress.org). This checks for that.
 	wget --no-check-certificate https://wordpress.org/latest.tar.gz
-fi 
-tar -xzvf latest.tar.gz
+fi
+#Error handling
+if [ "$?" != "0" ]
+then 
+	echo "Couldn't download the wordpress tar. Is wordpress.org down? Exiting."
+	exit 1
+fi
+tar -xzf latest.tar.gz
 cd wordpress
 mv -f * ../
 cd ..
@@ -264,5 +238,49 @@ then
 		shutdown -r now
 	fi
 fi
-echo -e "\nNow go to${green} http://$(curl --silent http://bot.whatismyipaddress.com/) ${nocolor}in your browser to set up your site." | tee -a /root/WordPressSQLInfo.txt
+
+# Lazy way to allow WordPress access to .htaccess files
+# Also restart services, ensure services start on boot, and changes any other needed settings for php to run correctly
+if [[ $OS = "amzn" ]]
+then
+	sed -i -e 's/AllowOverride None/AllowOverride All/g' /etc/httpd/conf/httpd.conf
+	service httpd start
+	service mysqld restart
+	chkconfig httpd on
+	chkconfig mysqld on
+elif [[ $OS = "ubuntu" ]]
+then
+	sed -i -e 's/AllowOverride None/AllowOverride All/g' /etc/apache2/apache2.conf
+	service apache2 start
+	service mysql restart
+elif [[ $OS = "rhel" ]]
+then
+	sed -i -e 's/AllowOverride None/AllowOverride All/g' /etc/httpd/conf/httpd.conf
+	service httpd start
+	service mariadb restart
+	chkconfig httpd on
+	chkconfig mariadb on
+elif [[ $OS = "sles" ]]
+then
+	sed -i -e 's/AllowOverride None/AllowOverride All/' /etc/apache2/default-server.conf
+	sed -i -e 's/DirectoryIndex index.html index.html.var/DirectoryIndex index.html index.html.var index.php/' /etc/apache2/httpd.conf
+	sed -i -e 's/APACHE_MODULES="/APACHE_MODULES="php5 /' /etc/sysconfig/apache2
+	sed -i -e 's/FW_CONFIGURATIONS_EXT=""/FW_CONFIGURATIONS_EXT="apache2"/' /etc/sysconfig/SuSEfirewall2
+	systemctl restart SuSEfirewall2
+	service apache2 start
+	service mysql restart
+	chkconfig apache2 on
+	chkconfig mysql on
+elif [[ $OS = "CentOS" ]]
+then
+	sed -i -e 's/AllowOverride None/AllowOverride All/g' /etc/httpd/conf/httpd.conf
+	/sbin/service httpd start
+	/sbin/service mysqld restart
+	/sbin/chkconfig httpd on
+	/sbin/chkconfig mysqld on
+else
+	echo -e "This script shouldn't have made it this far with your configuration. I have no idea how you did that. But we'll still give it a shot."
+fi
+# Done
+echo -e "\nNow go to${green} http://$(curl --silent http://bot.whatismyipaddress.com/) ${nocolor}in your browser to set up your site (it's vulnerable until you do)." | tee -a /root/WordPressSQLInfo.txt
 # You're welcome
