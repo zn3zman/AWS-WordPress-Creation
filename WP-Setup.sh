@@ -8,9 +8,9 @@
 # bash <(curl https://cdn.rawgit.com/zn3zman/AWS-WordPress-Creation/master/WP-Setup.sh)
 
 # Set default variables. The top three are what will be used for your SQL details if the script is run from UserData
-wordpressdb=wordpress-db
-SQLUser=SQLAdmin
-SQLPass=AComplexPassword87
+wordpressdb="wordpress-db"
+SQLUser="SQLAdmin"
+SQLPass="AComplexPassword87"
 upgrademe=yes
 red=`tput setaf 1`
 green=`tput setaf 2`
